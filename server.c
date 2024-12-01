@@ -4,11 +4,37 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <pthread.h>
+#include <string.h>
 #define PORT 8080
 #define BUFFER_SIZE 1024
-
+#define KILOBYTE 1024
 int main() {
+    char temp1[KILOBYTE];
+    char temp2[KILOBYTE];
+
+    char videofile1[KILOBYTE];
+    char videofile2[KILOBYTE];
+
+    // Read from stdin (which is redirected from the first pipe)
+    fgets(videofile1, KILOBYTE, stdin);
+    fgets(temp1, KILOBYTE, fdopen(4, "r"));
+    // Read from file descriptor 5 (which is redirected from the folder2 pipe)
+
+    // videofile1
+    size_t length1 = strlen(temp1) + strlen(videofile1) + 1;
+    char result1[length1];
+    strcpy(result1, temp1);
+    strcat(result1, videofile1);
+
+ 
+
+
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
@@ -36,7 +62,7 @@ int main() {
         perror("Listen failed");
         exit(EXIT_FAILURE);
     }
-
+    printf("Hello from C %s\n",result1);
     printf("Waiting for connections...\n");
 
     // Accept incoming connection
@@ -46,7 +72,7 @@ int main() {
     }
 
     // Open new file to write received video
-    output_file = fopen("received_video.mp4", "wb");
+    output_file = fopen(result1, "wb");
     if (output_file == NULL) {
         perror("Error opening file");
         return 1;

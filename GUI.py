@@ -25,163 +25,83 @@ def update_folder2_files():
     return
 
 
-def copy_one_file(source,destination,filename):
-    r1, w1 = os.pipe()
-    r2, w2 = os.pipe()
-    r3, w3 = os.pipe()
+
     
-    # Fork a child process
-    pid = os.fork()
-    
-    if pid > 0:  # Parent process
-        os.close(r1)  # Close the read end of the first pipe in the parent
-        os.close(r2)
-        os.close(r3)# Close the read end of the second pipe in the parent
-        w1 = os.fdopen(w1, 'w')  # Open the write end of the first pipe in write mode
-        w2 = os.fdopen(w2, 'w')
-        w3 = os.fdopen(w3, 'w')# Open the write end of the second pipe in write mode
-        w1.write(source)  # Write the first message to the first pipe
-        w1.close()  # Close the write end of the first pipe
-        w2.write(destination)  # Write the second message to the second pipe
-        w2.close()
-        w3.write(filename)
-        w3.close()# Close the write end of the second pipe
-        
-       
-        os.wait()
-    elif pid == 0:  # Child process
-        os.close(w1)  # Close the write end of the first pipe in the child
-        os.close(w2)
-        os.close(w3)# Close the write end of the second pipe in the child
-        os.dup2(r1, 0)  # Redirect stdin to the read end of the first pipe
-        os.dup2(r2, 3)
-        os.dup2(r3, 4)# Redirect a new file descriptor (3) to the read end of the second pipe
-        os.execl("./onefile", "./onefile")  # Execute the C program
-    else:
-        print("Fork failed")
-    if destination == "folder2/":
-        update_folder2_files()
-    else:
-        update_folder1_files()
-    
-    return
 
 def copy_from_folder1():
     selected_indices = listbox1.curselection()
-    if len(selected_indices) == 0:
-        tmsg.showerror("ERROR", "No Files Selected!")
+    if len(selected_indices) != 1:
+        tmsg.showerror("ERROR", "INVALID FILE SELECTION!")
         return
+
     selected_entries = [folder1_files[i] for i in selected_indices]
-    selected_entries.reverse();
-    # Create pipes for folder names
-     # Create two pipes
-    while len(selected_entries) != 0:
-        if len(selected_entries) == 1:
-            copy_one_file("folder1/","folder2/",selected_entries.pop())
-            tmsg.showinfo("SUCCESS","Files copied Successfully")
-            return
+    selected_entries.reverse()
+
+    while selected_entries:
         r1, w1 = os.pipe()
         r2, w2 = os.pipe()
         r_folder1, w_folder1 = os.pipe()
         r_folder2, w_folder2 = os.pipe()
-        
-        # Fork a child process
-        pid = os.fork()
-        
-        if pid > 0:  # Parent process
-            os.close(r1)  # Close the read end of the first pipe in the parent
-            os.close(r2)  # Close the read end of the second pipe in the parent
-            os.close(r_folder1)
-            os.close(r_folder2)
-            w1 = os.fdopen(w1, 'w')  # Open the write end of the first pipe in write mode
-            w2 = os.fdopen(w2, 'w')  # Open the write end of the second pipe in write mode
-            w1.write(selected_entries.pop())  # Write the first message to the first pipe
-            w1.close()  # Close the write end of the first pipe
-            w2.write(selected_entries.pop())  # Write the second message to the second pipe
-            w2.close()  # Close the write end of the second pipe
-            
-            w_folder1 = os.fdopen(w_folder1, 'w')
-            w_folder1.write("folder1/")
-            w_folder1.close()
-            
-            w_folder2 = os.fdopen(w_folder2, 'w')
-            w_folder2.write("folder2/")
-            w_folder2.close()
-            os.wait()
-        elif pid == 0:  # Child process
-            os.close(w1)  # Close the write end of the first pipe in the child
-            os.close(w2)  # Close the write end of the second pipe in the child
-            os.dup2(r1, 0)  # Redirect stdin to the read end of the first pipe
-            os.dup2(r2, 3)  # Redirect a new file descriptor (3) to the read end of the second pipe
+
+        file_name = selected_entries.pop()
+        folder1_path = "folder1/"
+        folder2_path = "folder2/"
+
+        # Parent writes to pipes
+        if os.fork() == 0:  # Child process for server
+            os.close(w1)
+            os.close(w2)
             os.close(w_folder1)
             os.close(w_folder2)
-            os.dup2(r_folder1, 4)  
-            os.dup2(r_folder2, 5) 
-            os.execl("./backend", "./backend")  # Execute the C program
-        else:
-            print("Fork failed")
+
+            os.dup2(r1, 0)       # Redirect stdin for the filename
+            os.dup2(r2, 3)       # Redirect custom fd for filename
+            os.dup2(r_folder1, 4)  # Redirect custom fd for folder1
+            os.dup2(r_folder2, 5)  # Redirect custom fd for folder2
+
+            os.execl("./server", "./server")
+            os._exit(0)
+
+        elif os.fork() == 0:  # Child process for client
+            os.close(w1)
+            os.close(w2)
+            os.close(w_folder1)
+            os.close(w_folder2)
+
+            os.dup2(r1, 0)
+            os.dup2(r2, 3)
+            os.dup2(r_folder1, 4)
+            os.dup2(r_folder2, 5)
+
+            os.execl("./client", "./client")
+            os._exit(0)
+
+        # Parent process
+        os.close(r1)
+        os.close(r2)
+        os.close(r_folder1)
+        os.close(r_folder2)
+
+        with os.fdopen(w1, "w") as w1_fd:
+            w1_fd.write(file_name)
+
+        with os.fdopen(w2, "w") as w2_fd:
+            w2_fd.write(file_name)
+
+        with os.fdopen(w_folder1, "w") as w_folder1_fd:
+            w_folder1_fd.write(folder2_path)
+
+        with os.fdopen(w_folder2, "w") as w_folder2_fd:
+            w_folder2_fd.write(folder1_path)
+
+        os.wait()  # Wait for child processes
+
     update_folder2_files()
-    tmsg.showinfo("SUCCESS","Files copied Successfully")
-    return
+    tmsg.showinfo("SUCCESS", "Files copied Successfully")
 
 
-def copy_from_folder2():
-    selected_indices = listbox2.curselection()
-    if len(selected_indices) == 0:
-        tmsg.showerror("ERROR", "No Files Selected!")
-        return
-    selected_entries = [folder2_files[i] for i in selected_indices]
-    selected_entries.reverse();
-    # Create pipes for folder names
-     # Create two pipes
-    while len(selected_entries) != 0:
-        if len(selected_entries) == 1:
-            copy_one_file("folder2/","folder1/",selected_entries.pop())
-            tmsg.showinfo("SUCCESS","Files copied Successfully") 
-            return
-        r1, w1 = os.pipe()
-        r2, w2 = os.pipe()
-        r_folder1, w_folder1 = os.pipe()
-        r_folder2, w_folder2 = os.pipe()
-        
-        # Fork a child process
-        pid = os.fork()
-        
-        if pid > 0:  # Parent process
-            os.close(r1)  # Close the read end of the first pipe in the parent
-            os.close(r2)  # Close the read end of the second pipe in the parent
-            os.close(r_folder1)
-            os.close(r_folder2)
-            w1 = os.fdopen(w1, 'w')  # Open the write end of the first pipe in write mode
-            w2 = os.fdopen(w2, 'w')  # Open the write end of the second pipe in write mode
-            w1.write(selected_entries.pop())  # Write the first message to the first pipe
-            w1.close()  # Close the write end of the first pipe
-            w2.write(selected_entries.pop())  # Write the second message to the second pipe
-            w2.close()  # Close the write end of the second pipe
-            
-            w_folder1 = os.fdopen(w_folder1, 'w')
-            w_folder1.write("folder2/")
-            w_folder1.close()
-            
-            w_folder2 = os.fdopen(w_folder2, 'w')
-            w_folder2.write("folder1/")
-            w_folder2.close()
-            os.wait()
-        elif pid == 0:  # Child process
-            os.close(w1)  # Close the write end of the first pipe in the child
-            os.close(w2)  # Close the write end of the second pipe in the child
-            os.dup2(r1, 0)  # Redirect stdin to the read end of the first pipe
-            os.dup2(r2, 3)  # Redirect a new file descriptor (3) to the read end of the second pipe
-            os.close(w_folder1)
-            os.close(w_folder2)
-            os.dup2(r_folder1, 4)  
-            os.dup2(r_folder2, 5) 
-            os.execl("./backend", "./backend")  # Execute the C program
-        else:
-            print("Fork failed")
-    update_folder1_files()
-    tmsg.showinfo("SUCCESS","Files copied Successfully")
-    return
+
+
 
 
 
@@ -230,7 +150,6 @@ scrollbar2.config(command=listbox2.yview)
 scrollbar2.pack(side=tk.RIGHT, fill=tk.Y)
 listbox2.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-tk.Button(root, text="SEND TO FOLDER 1", command=copy_from_folder2,bg="beige",height=2,width=15,font=("helvetica",12,'bold')).place(x = 878,y = 625)
 
 
 

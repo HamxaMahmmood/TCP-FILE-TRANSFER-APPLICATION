@@ -4,20 +4,54 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <pthread.h>
+#include <string.h>
 #define PORT 8080
 #define BUFFER_SIZE 1024
-
+#define KILOBYTE 1024
 int main() {
+
+  
+
+  
+    char temp2[KILOBYTE];
+
+    char videofile2[KILOBYTE];
+
+    // Read from file descriptor 3 (which is redirected from the second pipe)
+    fgets(videofile2, KILOBYTE, fdopen(3, "r"));
+    // Read from file descriptor 5 (which is redirected from the folder2 pipe)
+    fgets(temp2, KILOBYTE, fdopen(5, "r"));
+
+
+    // videofile2
+  
+    // videofile4
+    size_t length4 = strlen(temp2) + strlen(videofile2) + 1;
+    char result4[length4];
+    strcpy(result4, temp2);
+    strcat(result4, videofile2);
+  
+    
+    printf("Hello from client %s",result4);
+
+
+
+
+
+
+
     int sock = 0;
     struct sockaddr_in server_addr;
     FILE *video_file;
     char buffer[BUFFER_SIZE];
-    char file_name[100];
-    printf("Enter the name of the video file to send: ");
-    scanf("%s", file_name);  // Get the file name from the user
-    // Open video file
-    video_file = fopen(file_name, "rb");
+   
+    video_file = fopen(result4, "rb");
     if (video_file == NULL) {
         perror("Error opening file");
         return 1;
